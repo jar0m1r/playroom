@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/jar0m1r/blackjack"
 )
 
 func startTable() {
 
-	t := NewTable()
+	t := blackjack.NewTable()
 
 	numplayers := 1
 	fmt.Println("How many players?")
@@ -31,18 +33,18 @@ func startTable() {
 
 }
 
-func startGame(t *table) {
+func startGame(t *blackjack.Table) {
 	(*t).NewGame()
 
 	(*t).Deal()
 
-	(*t).printHands() //one dealer hand blind (later)
+	(*t).PrintHands() //one dealer hand blind (later)
 
-	for playerindex := range (*t).players {
+	for playerindex := range (*t).Players {
 		(*t).Play(playerindex)
 	}
 
-	(*t).printHands() //one dealer hand blind (later)
+	(*t).PrintHands() //one dealer hand blind (later)
 
 	//check if deck actually schrunk
 
