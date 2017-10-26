@@ -1,70 +1,116 @@
-package main
+package playroom
 
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/jar0m1r/blackjack"
 )
 
-type playroom struct {
-	ID             string
-	tables         []Table
-	players        []Player
-	connectionPool []connectionData
+//Playroom is the core Playroom Struct for use in servers to hold Users, Tables and Connections
+type Playroom struct {
+	ID       string
+	Tables   []Table
+	TableMap map[string]*Table
+	UserMap  map[string]*User
 }
 
-type connectionData struct {
-	ID     string
-	name   string
-	wsconn *websocket.Conn
-}
-
-var pr = playroom{
-	ID:             "xxxxxxx",
-	tables:         []Table{},
-	connectionPool: []connectionData{},
-}
-
-func addPlayerToPlayroom(conn *websocket.Conn, msg []byte) string {
-
-	var playerMessage NewPlayerMessage
-	err := json.Unmarshal([]byte(msg), &playerMessage)
-
-	if err != nil {
-		fmt.Println("Error unmarshalling to NewPlayerMessage", err)
-		return "failure"
+//NewPlayroom initializes and returns a new Playroom struct
+func NewPlayroom() Playroom {
+	p := Playroom{
+		ID:       "xxxxxxx",
+		Tables:   []Table{},
+		TableMap: map[string]*Table{},
+		UserMap:  map[string]*User{},
 	}
 
-	var player Player
-	player = playerMessage.Payload
-
-	fmt.Printf("Player %s is connected\n", player.Name)
-
-	pr.connectionPool = append(pr.connectionPool, connectionData{"xxxxxxx", player.Name, conn})
-
-	return "success"
+	return p
 }
 
-func addTableToPlayroom(conn *websocket.Conn, msg []byte) string {
+//AddUser creates a (Playroom) User with uuid and credit and adds to the Playroom Users slice
+func (pr *Playroom) AddUser(name string) (User, error) {
 
-	var tableMessage NewTableMessage
-	err := json.Unmarshal([]byte(msg), &tableMessage)
-
-	if err != nil {
-		fmt.Println("Error unmarshalling to NewTableMessage", err)
-		return "failure"
+	user := User{
+		ID:     uuid.New().String(),
+		Name:   name,
+		Credit: 10.0,
+		Wsconn: nil,
 	}
 
-	var table Table
-	table = tableMessage.Payload
+	(*pr).UserMap[user.ID] = &user
 
-	pr.addTable(table)
+	fmt.Println("User created with id", user.ID)
 
-	return "success"
+	return user, nil //Todo Error handling
 }
 
-func (pr *playroom) addTable(t Table) {
+//AddUserConnection reads the user and adds the user and connection to the ConnectionsPool
+func (pr *Playroom) AddUserConnection(conn *websocket.Conn, u User) error {
+
+	user := (*pr).UserMap[u.ID]
+	(*user).Wsconn = conn
+	fmt.Println("connection added to ", *user)
+	return nil
+}
+
+//AddTable creates a table of gametype and returns the table ID
+func (pr *Playroom) AddTable(name, gametype string, numseats int) (string, error) {
+
+	t, err := NewTable(name, gametype, numseats)
+
+	if err != nil {
+		return "", fmt.Errorf("Table could not be created %s", err)
+	}
+
+	(*pr).Tables = append((*pr).Tables, t)
+	(*pr).TableMap[t.ID] = &t
+
+	//start broadcasting table states from the moment it is created
+	t.BroadcastTable()
+
+	return t.ID, nil
+}
+
+//BroadcastTableList is a temporary solution for broadcasting a table list via websockets when changed
+func (pr *Playroom) BroadcastTableList() {
+	var prevlen int
+
+	for {
+		time.Sleep(time.Second * 10)
+		if len(pr.Tables) != prevlen {
+			prevlen = len(pr.Tables)
+			tables, err := json.Marshal(pr.Tables)
+			fmt.Printf("tables after marshall %s\n", tables)
+			if err != nil {
+				fmt.Println("Error marshalling tables", err)
+			}
+
+			for _, v := range pr.UserMap {
+				err := v.Wsconn.WriteMessage(websocket.TextMessage, tables)
+
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+
+			}
+		}
+	}
+}
+
+//GetTable returns table struct value
+func (pr *Playroom) GetTable(key string) (Table, error) {
+
+	if t, ok := (*pr).TableMap[key]; ok {
+		return *t, nil
+	}
+	return Table{}, fmt.Errorf("the key did not correspond to a known table")
+}
+
+/* func (pr *Playroom) addTable(t Table) {
 	(*pr).tables = append((*pr).tables, t)
 
 	broadcastmessage := OutgoingMessage{
@@ -89,4 +135,23 @@ func (pr *playroom) addTable(t Table) {
 			fmt.Println("Error broadcasting new table to pool", err)
 		}
 	}
+} */
+
+func startGame(t *blackjack.Table) {
+	/* 	(*t).NewGame()
+
+	   	(*t).Deal()
+
+	   	(*t).PrintHands() //one dealer hand blind (later)
+
+	   	for playerindex := range (*t).Players {
+	   		(*t).Play(playerindex)
+	   	}
+
+	   	(*t).PrintHands() //one dealer hand blind (later)
+
+	   	//check if deck actually schrunk
+
+	   	(*t).FinishGame() */
+
 }
